@@ -1,0 +1,198 @@
+#!/bin/bash
+
+INTERVAL=2
+NAME="Status_demo"
+LAUNCHERFILE="${HOME}/Desktop/abc.desktop"
+COMMAND="( ls /tmp/this_file ) > /dev/null 2>&1 ; echo \$?"
+declare -A icons 
+
+# icons path is relative to working directory - you can set launcher
+# working directory to his own installation folder.
+icons["0"]="icons/off.png"
+icons["default"]="icons/on.png"
+
+# this function is called if argument is specified. We will exit after return.
+function on_click {
+    # $1 holds parameter from launcher. If parameter is ommited, $1 is set to "default"
+
+    logit "click!"
+    logit "path $PWD"
+    if [ -f /tmp/this_file ]; then
+        rm -f /tmp/this_file
+        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "Removing!"
+    else
+        touch /tmp/this_file
+        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "Creating!"
+    fi
+}
+
+# this function is called whenever is state change detected.
+# $1 - old state
+# $2 - new state
+function change_notify {
+    notify-send --app-name=$NAME --expire-time=10000 "${NAME}" "State changed"
+}
+
+# #### READ ME ####
+
+# above NAME represents name of the launcher on the desktop. 
+# For example NAME=test would be modifying ~/Desktop/test.desktop launcher.
+
+# above COMMAND is executed, and its output is considered as "state".
+# match state in icons associative array 'icons' below. 
+# For example icons["up"]="/my/up_icon.png"
+
+# above 'icons' entries reflect mapping state -> icon image.
+# you can specify filenames without path from /usr/share/icons.
+
+# above 'on_click' is called, if argument is passed to the program.
+# You can use this in launcher itself, pointing to this script. 
+# After on_click, the script terminates,if there is already
+# running instance. State is rescanned after on_click.
+
+# #### EXAMPLES ####
+
+## GATEWAY DEVICE 
+# COMMAND="ip r | grep ^default | head -n1  | awk '{ print \$5 }'"
+# declare -A icons 
+# icons["ppp0"]=face-tired
+# icons["default"]=~/Pictures/beer.png
+
+
+LOG_LEVEL=1
+
+
+########## DON'T EDIT BELOW ##########
+
+
+filename=${LAUNCHERFILE}
+datadir=/tmp/${NAME}.state/
+updatefile=${datadir}/${NAME}.ping
+state=${datadir}/${NAME}.state
+oldstate=${datadir}/${NAME}.state.old
+lockfile=${datadir}/${NAME}.lock
+pidfile=${datadir}/${NAME}.pid
+logfile=${datadir}/${NAME}.log
+
+function logit {
+    if [ $LOG_LEVEL -gt 0 ]; then
+        echo "`date -R` $NAME-$$: $1 $2 $3 $4 $5 $6 $7 $8 $9 ${10}" >> $logfile
+    fi
+}
+
+
+function recreate {
+    ( mkdir $datadir ) > /dev/null 2>&1
+
+    if [ ! -f $state ]; then 
+       echo -n "unknown" > $state
+    fi
+}
+
+function update_state {
+   
+   #reset update file
+   rm -f $updatefile
+
+   # run command and capture its output
+   CMD=`eval ${COMMAND}`
+
+   # reflect if output changed
+   if [[ "$CMD" == "`cat $state`" ]]; then
+       logit "Same state: $CMD"
+   else
+       logit "State changed: `cat $state` -> $CMD"
+       cat $state > $oldstate
+       echo "$CMD" > $state
+       touch $updatefile
+   fi
+} 
+
+function change_icon {
+        ICON=${icons[$1]:-"default"};
+        if [[ "$ICON" == "default" ]]; then
+            ICON=${icons["default"]:-"default"}
+        fi
+        if [[ "$ICON" == "default" ]]; then
+            ICON="close-symbolic"
+        fi
+
+        PWD=`pwd`
+        
+        logit "New icon: ${PWD}/${ICON} to $filename"
+        OUT=`( desktop-file-edit --set-icon="${PWD}/${ICON}" "$filename") 2>&1`
+        logit "desktop-file-edit: $OUT"
+        chmod a+x $filename
+}
+
+
+function pid_check_bail {
+
+    PID=$$
+    if [ -f $pidfile ]; then
+        if [[ "`cat $pidfile`" == "$PID" ]]; then
+            true            
+            #logit "ok, it's my pid"
+        elif [ -f /proc/`cat $pidfile`/cmdline ]; then
+            logit "program is already running"
+            exit -1
+        else
+            logit "program not running anymore"
+            if [ -f $lockfile ]; then
+                logit "removing stale lockfile"
+                rm -f $lockfile
+            fi
+	fi
+    fi
+    echo -n $PID > $pidfile
+}
+
+
+### MAIN ###
+
+if [[ "$1" == "exit" ]]; then
+
+   if [ -f $pidfile ]; then
+       logit "terminating"
+       kill -15 `cat $pidfile`
+       rm -f $pidfile
+   fi
+   exit 0
+fi
+
+PARAM1=$1
+if [[ "$PARAM1" == "" ]]; then
+    PARAM1="default"
+fi
+
+while :; do
+  
+    if [ ! -f $lockfile ]; then
+        recreate
+        update_state 
+
+        if [[ "$PARAM1" != "" ]]; then
+            touch $lockfile
+
+            on_click $PARAM1
+            PARAM1=""
+
+            sleep "0.$INTERVAL"
+
+            rm -f $lockfile
+        fi
+
+        pid_check_bail
+
+        if [ -f $updatefile ]; then
+            logit "Change detected."
+            curstat=`cat ${state}`
+            oldstat=`( cat ${oldstate} ) 2>/dev/null`
+            change_icon $curstat
+            change_notify $oldstat $curstat
+        fi
+    else 
+        logit "lock file $lockfile present, waiting."
+    fi
+    sleep $INTERVAL
+done
