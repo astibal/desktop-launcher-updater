@@ -1,21 +1,26 @@
 #!/bin/bash
 
-INTERVAL=2
-NAME="Status_demo"     # used to create .desktop file, and status files. !!! DO NOT USE SPACES !!!
-LAUNCHERFILE="${HOME}/Desktop/${NAME}.desktop"
-COMMAND_PRE="status="
-COMMAND="( ls /tmp/this_file ) > /dev/null 2>&1 ; echo \$?"
-COMMAND_POST=""
+#######################
+#
+ NAME="Status_demo"     # used to create .desktop file, and status files. !!! DO NOT USE SPACES !!!
+ COMMAND_PRE="status="
+ COMMAND="( ls /tmp/this_file ) > /dev/null 2>&1 ; echo \$?"
+ COMMAND_POST=""
+#
+#
+ declare -A icons 
+ icons["status=0"]="/icons/on.png"
+ icons["default"]="/icons/off.png"
+ INTERVAL=2
+#
+#######################
 
-declare -A icons 
+LAUNCHERFILE="${HOME}/Desktop/${NAME}.desktop"
+icons["X-not-running-updater"]="/icons/unknown.png"
 
 # icons path is relative to working directory - you can set launcher
 # working directory to his own installation folder.
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
-icons["status=0"]="/icons/on.png"
-icons["default"]="/icons/off.png"
-icons["X-not-running-updater"]="/icons/unknown.png"
 
 # this function is called if argument is specified. We will exit after return.
 function on_click {
