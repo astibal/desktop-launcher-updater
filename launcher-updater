@@ -1,8 +1,8 @@
 #!/bin/bash
 
 INTERVAL=2
-NAME="Status_demo"
-LAUNCHERFILE="${HOME}/Desktop/abc.desktop"
+NAME="Status_demo"     # used to create .desktop file, and status files. !!! DO NOT USE SPACES !!!
+LAUNCHERFILE="${HOME}/Desktop/${NAME}.desktop"
 COMMAND_PRE="status="
 COMMAND="( ls /tmp/this_file ) > /dev/null 2>&1 ; echo \$?"
 COMMAND_POST=""
@@ -11,8 +11,11 @@ declare -A icons
 
 # icons path is relative to working directory - you can set launcher
 # working directory to his own installation folder.
-icons["0"]="icons/off.png"
-icons["default"]="icons/on.png"
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+
+icons["status=0"]="/icons/on.png"
+icons["default"]="/icons/off.png"
+icons["X-not-running-updater"]="/icons/unknown.png"
 
 # this function is called if argument is specified. We will exit after return.
 function on_click {
@@ -21,11 +24,11 @@ function on_click {
     logit "click!"
     logit "path $PWD"
     if [ -f /tmp/this_file ]; then
-        rm -f /tmp/this_file
-        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "Removing!"
+        logger "this file exists"
+        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "File exists!"
     else
-        touch /tmp/this_file
-        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "Creating!"
+        logger "this file does exist no longer"
+        notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "File does exist no longer!"
     fi
 }
 
@@ -122,8 +125,13 @@ function change_icon {
 
         PWD=`pwd`
         
+        TEXT="$1"
+        if [[ "$TEXT" == "X-not-running-updater" ]]; then
+            TEXT="$NAME: not running"
+        fi
+        
         logit "New icon: ${PWD}/${ICON} to $filename"
-        OUT=`( desktop-file-edit --set-icon="${PWD}/${ICON}" --set-name="$1" "$filename") 2>&1`
+        OUT=`( desktop-file-edit --set-icon="${PWD}/${ICON}" --set-name="$TEXT" "$filename") 2>&1`
         logit "desktop-file-edit: $OUT"
         chmod a+x $filename
 }
@@ -150,6 +158,44 @@ function pid_check_bail {
     echo -n $PID > $pidfile
 }
 
+function create_desktop {
+    if [ ! -f "${LAUNCHERFILE}" ]; then
+        what="[Desktop Entry]
+        Comment[en_US]=
+        Comment=
+        Exec=${SCRIPTPATH}/$0
+        GenericName[en_US]=
+        GenericName=
+        Icon=${SCRIPTPATH}/icons/unknown.png
+        MimeType=
+        Name=${NAME}
+        Path=${SCRIPTPATH}
+        StartupNotify=false
+        Terminal=false
+        TerminalOptions=
+        Type=Application
+        X-DBUS-ServiceName=
+        X-DBUS-StartupType=
+        X-Desktop-File-Install-Version=0.23
+        X-KDE-SubstituteUID=false
+        X-KDE-Username=
+        Actions=Terminate;
+        
+        [Desktop Action Terminate]
+        Name=Terminate ${NAME}
+        Exec=cd ${SCRIPTPATH};  ${SCRIPTPATH}/$0 exit"
+        echo "$what" > ${LAUNCHERFILE}
+        
+        exit 0
+    fi
+}
+
+function process_update {
+    curstat=`cat ${state}`
+    oldstat=`( cat ${oldstate} ) 2>/dev/null`
+    change_icon $curstat
+    change_notify $oldstat $curstat
+}
 
 ### MAIN ###
 
@@ -157,17 +203,24 @@ if [[ "$1" == "exit" ]]; then
 
    if [ -f $pidfile ]; then
        logit "terminating"
+       change_icon "X-not-running-updater"
        kill -15 `cat $pidfile`
        rm -f $pidfile
+       
+       notify-send --app-name=${NAME} --expire-time=10000 "${NAME}" "Terminating..."
    fi
    exit 0
 fi
+
+create_desktop
 
 PARAM1=$1
 if [[ "$PARAM1" == "" ]]; then
     PARAM1="default"
 fi
 
+# update icon on start
+process_update
 while :; do
   
     if [ ! -f $lockfile ]; then
@@ -189,10 +242,7 @@ while :; do
 
         if [ -f $updatefile ]; then
             logit "Change detected."
-            curstat=`cat ${state}`
-            oldstat=`( cat ${oldstate} ) 2>/dev/null`
-            change_icon $curstat
-            change_notify $oldstat $curstat
+            process_update
         fi
     else 
         logit "lock file $lockfile present, waiting."
