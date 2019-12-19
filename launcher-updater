@@ -1,4 +1,5 @@
 #!/bin/bash
+declare -A icons 
 
 ####################### TO BE SET BY USER #######################
 #
@@ -7,8 +8,7 @@
  COMMAND="( ls /tmp/this_file ) > /dev/null 2>&1 ; echo \$?"
  COMMAND_POST=""
 #
-#
- declare -A icons 
+# ... icons based on string result of: COMMAND_PRE+`COMMAND`+COMMAND_POST
  icons["status=0"]="/icons/on.png"
  icons["default"]="/icons/off.png"
  INTERVAL=2
