@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#######################
+####################### TO BE SET BY USER #######################
 #
  NAME="Status_demo"     # used to create .desktop file, and status files. !!! DO NOT USE SPACES !!!
  COMMAND_PRE="status="
@@ -13,7 +13,10 @@
  icons["default"]="/icons/off.png"
  INTERVAL=2
 #
-#######################
+#  After above is set, run this script to create .desktop file.
+#  Then just double-click it and see results!
+#
+#######################    -----------     #######################
 
 LAUNCHERFILE="${HOME}/Desktop/${NAME}.desktop"
 icons["X-not-running-updater"]="/icons/unknown.png"
